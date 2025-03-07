@@ -3,13 +3,12 @@ package org.example;
 import java.util.Random;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MaxLetterAnalyzer {
-    final int QUEUE_CAPACITY = 10;
-    final int LENGTH = 10;
+    final int QUEUE_CAPACITY = 100;
+    final int LENGTH = 100_000;
     final int TEXT_NUMBER = 10_000;
-    AtomicBoolean isGenerationFinished = new AtomicBoolean(false);
+    final String END_MARKER = "END";
 
     public void analize() throws InterruptedException {
         BlockingQueue<String> queueForA = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
@@ -17,84 +16,26 @@ public class MaxLetterAnalyzer {
         BlockingQueue<String> queueForC = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
 
         Thread generatorTextThread = new Thread(() -> {
-            for (int i = 0; i < TEXT_NUMBER; i++) {
-                String text = generateText("abc", LENGTH);
-                try {
+            try {
+                for (int i = 0; i < TEXT_NUMBER; i++) {
+                    String text = generateText("abc", LENGTH);
                     queueForA.put(text);
                     queueForB.put(text);
                     queueForC.put(text);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    System.out.println(e.getMessage());
                 }
-            }
-            isGenerationFinished.set(true);
-            System.out.println("generation finished");
-        });
-
-        Thread aAnalyzerThread = new Thread(() -> {
-            try {
-                int maxCount = -1;
-                String maxText = "";
-
-                while (!isGenerationFinished.get()) {
-                    String text = queueForA.take();
-                    int count = countLetter(text, 'a');
-
-                    if (count > maxCount) {
-                        maxCount = count;
-                        maxText = text;
-                    }
-                }
-                System.out.println("aAnalyzerThread finished");
-                System.out.println("MaxText A: " + maxText + " MaxCount A " + maxCount);
+                queueForA.put(END_MARKER);
+                queueForB.put(END_MARKER);
+                queueForC.put(END_MARKER);
+                System.out.println("generation finished");
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                System.out.println("aAnalyzerThread was interrupted");
+                System.out.println("Generator was interrupted");
             }
         });
 
-        Thread bAnalyzerThread = new Thread(() -> {
-            try {
-                int maxCount = -1;
-                String maxText = "";
-                while (!isGenerationFinished.get()) {
-                    String text = queueForB.take();
-                    int count = countLetter(text, 'b');
-
-                    if (count > maxCount) {
-                        maxCount = count;
-                        maxText = text;
-                    }
-                }
-                System.out.println("bAnalyzerThread finished");
-                System.out.println("MaxText B:  " + maxText + " MaxCount B " + maxCount);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                System.out.println("bAnalyzerThread was interrupted");
-            }
-        });
-
-        Thread cAnalyzerThread = new Thread(() -> {
-            try {
-                int maxCount = -1;
-                String maxText = "";
-                while (!isGenerationFinished.get()) {
-                    String text = queueForC.take();
-                    int count = countLetter(text, 'c');
-
-                    if (count > maxCount) {
-                        maxCount = count;
-                        maxText = text;
-                    }
-                }
-                System.out.println("cAnalyzerThread finished");
-                System.out.println("MaxText C: " + maxText + " MaxCount C " + maxCount);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                System.out.println("cAnalyzerThread was interrupted");
-            }
-        });
+        Thread aAnalyzerThread = new Thread(createAnalyzerTask(queueForA, 'a'));
+        Thread bAnalyzerThread = new Thread(createAnalyzerTask(queueForB, 'b'));
+        Thread cAnalyzerThread = new Thread(createAnalyzerTask(queueForC, 'c'));
 
         generatorTextThread.start();
         aAnalyzerThread.start();
@@ -107,6 +48,29 @@ public class MaxLetterAnalyzer {
         cAnalyzerThread.join();
     }
 
+    private Runnable createAnalyzerTask(BlockingQueue<String> queue, char letter) {
+        return () -> {
+            try {
+                int maxCount = -1;
+                String maxText = "";
+
+                while (true) {
+                    String text = queue.take();
+                    if (text.equals(END_MARKER)) break;
+
+                    int count = countLetter(text, letter);
+                    if (count > maxCount) {
+                        maxCount = count;
+                        maxText = text;
+                    }
+                }
+                System.out.printf("AnalyzerThread finished for letter %c .%n MaxText: %s %nMaxCount %d %n", letter, maxText, maxCount);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                System.out.println("aAnalyzerThread was interrupted");
+            }
+        };
+    }
 
     private int countLetter(String text, char letter) {
         int count = 0;
@@ -127,5 +91,3 @@ public class MaxLetterAnalyzer {
         return text.toString();
     }
 }
-
-
